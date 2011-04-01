@@ -1,0 +1,55 @@
+#!/bin/bash
+#!/bin/bash -vx
+D=/tmp/screen-send-$$
+[ -e $D ] && rm -fr $D
+[ -e $D ] && exit 2
+mkdir $D
+RC=0
+
+function send {
+    local NL=$'\n' line=$1
+    screen -p $SCR_TITLE -S $SCR_TITLE -X eval "register p \"$line$NL\"" "paste p"
+}
+
+function start {
+    if [ -f $SCR_ULOCK -a \( "$1" != "1" \) ] ; then
+        echo "lock file \"$SCR_ULOCK\" exists; use force-start to start"
+        RC=7
+    else
+        screen -t $SCR_TITLE -dmS $SCR_TITLE
+        F=$D/startup
+        rm -f $F
+        until [ -f $F ] ; do
+            send "touch $F ; cd ~$SCR_USER ; touch $SCR_ULOCK ; export PIDFILE=$SCR_ULOCK ; $SCR_CMD ; rm -f $SCR_ULOCK"
+            usleep 100000
+        done
+        rm -f $F
+    fi
+}
+
+function stop {
+    send "$SCR_STOP"
+    until [ ! -f $SCR_ULOCK ] ; do
+        usleep 100000
+    done
+    send "exit"
+}
+
+case "$1" in
+  force-start)
+        start 1
+        ;;
+  start)
+        start
+        ;;
+  stop)
+        stop
+        ;;
+  *)
+        echo "unknown command \"$1\""
+        RC=5
+esac
+
+rm -fr $D
+
+exit $RC

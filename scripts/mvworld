@@ -1,0 +1,24 @@
+#!/bin/bash -vx
+H=/home/ec2-user
+T=mc
+S=mc2
+
+W=world
+B=boxlandia
+N=nether
+
+cd $H/$T
+mv $W $B
+perl -pi -ne "s/spawn-protection=\d+/spawn-protection=1/;s/level-name=$W/level-name=$B/" server.properties
+cd plugins/Essentials
+cp $H/$S/plugins/Essentials/config.yml .
+perl -pi -ne "s/world: $W/world: $B/;s/$W\]/$B]/" userdata/* spawn.yml warps/*
+
+
+
+cd ../EssentialsGroupManager/worlds
+mv $W $B
+cp -r $B $N
+cp -r $H/$S/plugins/EssentialsGroupManager/worlds/$B .
+cp -r $H/$S/plugins/EssentialsGroupManager/worlds/$N .
+

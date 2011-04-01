@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+# mc	This shell script takes care of starting and stopping Minecraft.
+#
+# chkconfig: - 59 73
+# description: mc (minecraft) is a game server
+
+# Source function library.
+. /etc/init.d/functions
+
+# Source networking configuration.
+. /etc/sysconfig/network
+
+prog=minecraftd
+procname=${SCR_CMD##*/}
+lockfile=/var/lock/subsys/$prog
+PATH=$PATH:/usr/local/sbin
+
+[ -f /etc/sysconfig/$prog ] || exit 6
+. /etc/sysconfig/$prog
+
+start() {
+	[ "$EUID" != "0" ] && exit 4
+	[ "$NETWORKING" = "no" ] && exit 1
+#	[ -x /usr/local/sbin/ ] || exit 5
+	[ -f /etc/sysconfig/$prog ] || exit 6
+	. /etc/sysconfig/$prog
+
+        # Start daemons.
+        echo -n $"Starting $prog: "
+        daemon --pidfile $SCR_ULOCK --user $SCR_USER $prog start $OPTIONS
+	RETVAL=$?
+        echo
+	[ $RETVAL -eq 0 ] && touch $lockfile
+	# && echo "$SCR_ULOCK" > $lockfile
+	return $RETVAL
+}
+
+stop() {
+	[ "$EUID" != "0" ] && exit 4
+	#. /etc/sysconfig/$prog
+
+        echo -n $"Shutting down $prog: "
+	# killproc $prog
+        runuser -s /bin/bash - $SCR_USER -c ". /etc/sysconfig/$prog ; $prog stop"
+	RETVAL=$?
+        echo
+        [ ! $RETVAL -eq 0 ] && failure $"${prog##*/} shutdown" || success $"${prog##*/} shutdown"
+	[ $RETVAL -eq 0 ] && rm -f $lockfile
+	return $RETVAL
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  status)
+	status ${SCR_ULOCK:+-p} $SCR_ULOCK $prog
+	;;
+  restart|force-reload)
+	stop
+	start
+	;;
+  try-restart|condrestart)
+	if status $prog > /dev/null; then
+	    stop
+	    start
+	fi
+	;;
+  reload)
+	exit 3
+	;;
+  *)
+	echo $"Usage: $0 {start|stop|status|restart|try-restart|force-reload}"
+	exit 2
+esac
+

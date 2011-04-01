@@ -1,0 +1,97 @@
+#!/bin/bash
+
+#
+# nohupd - a utility for daemonifying arbitrary commands in a sysvinit-friendly fashion
+# (c) 2010 Peter Mei
+#
+# Forks an arbitrary process behind nohup, maintaining a pidfile 
+
+USAGE=$"$0: Usage: nohupd [-n] [-f pidfile] [-d delay] [-p pattern] {command}"
+
+# basic argument-scrubbing ...
+if [ $# -lt 1 ] ; then
+    echo "$USAGE"
+    exit 1
+fi
+
+# check for "--help"
+args=("$@")
+while [ "$args" != "${args##-}" ]; do
+    case $args in
+    --help | -h )
+        echo "$USAGE"
+        exit 1 ;;
+    * ) args=(${args[@]:1}) ;;
+    esac
+done
+
+# a function to watch for a child process and write its pid to a file
+function childpid {
+    local ppid=$$ delay=$1 pidfile=$2 pattern=$3 pid=
+    #echo "in childpid: \$\$=$$, \$ppid=$ppid"
+    pid=`pgrep -P $ppid $pattern`
+    until [ -n "${pid//[[:blank:]]}" ] ; do
+        usleep $((delay * 1000))
+        pid=`pgrep -P $ppid $pattern`
+    done
+    echo $pid >$pidfile
+}
+
+if [ "$1" = "--nodaemon" -o "$1" = "-n" ]; then
+    shift
+    delay=100 pattern= pid= pidfile= gotpattern= user=
+    #echo "isexecute: pid=$$"
+    while [ "$1" != "${1##[-]}" ]; do
+        case $1 in
+        --pidfile | -f )
+            pidfile=$2
+            shift 2 ;;
+        --pidfile=?*)
+            pidfile=${1#--pidfile=}
+            shift ;;
+        --pattern | -p )
+            gotpattern=true
+            pattern=$2
+            shift 2 ;;
+        --pattern=?* )
+            gotpattern=true
+            pattern=${1#--pattern=}
+            shift ;;
+        --delay | -d )
+            delay=$2
+            shift 2 ;;
+        --delay=?* )
+            delay=${1#--delay=}
+            shift ;;
+        --user | -u )
+            user=$2
+            shift 2 ;;
+        --user=?* )
+            user=${1#--user=}
+            shift ;;
+        *)  echo "$USAGE"
+            exit 1 ;;
+        esac
+    done
+    
+    # determine what to look for
+    if [ -z "$gotpattern" ] ; then
+        pattern=${1%%[[:blank:]]*}
+        pattern=${pattern##*/}
+    fi
+
+    childpid $delay $pidfile $pattern &
+
+    # And start it up.
+    if [ -z "$user" ]; then
+       "$@"
+    else
+       runuser -s /bin/bash $user -c "$*"
+    fi
+
+    rm -f $pidfile
+
+else
+    (nohup $0 --nodaemon "$@" &) 2>/dev/null >/dev/null
+fi
+
